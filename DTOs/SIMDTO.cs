@@ -1,0 +1,14 @@
+﻿using System;
+namespace StockLine_API.DTOs
+{
+    public class SIMDTO
+    {
+        public int SIMID { get; set; }
+        public string NumeroSIM { get; set; }
+        public int? ProductoID { get; set; }
+        public string? ProductoNombre { get; set; }
+        public string? Ubicacion { get; set; }
+        public string? Estado { get; set; }
+        public DateTime? FechaAsignacion { get; set; }
+    }
+}

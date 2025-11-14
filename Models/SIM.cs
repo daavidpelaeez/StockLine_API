@@ -1,0 +1,15 @@
+﻿using System;
+
+namespace StockLine_API.Models
+{
+    public class SIM
+    {
+        public int SIMID { get; set; }
+        public string NumeroSIM { get; set; }
+        public int? ProductoID { get; set; }
+        public Producto? Producto { get; set; }
+        public DateTime? FechaAsignacion { get; set; } 
+        public string? Ubicacion { get; set; } 
+        public string? Estado { get; set; } 
+    }
+}

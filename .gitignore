@@ -1,0 +1,53 @@
+# Visual Studio / IDE
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build
+bin/
+obj/
+out/
+
+# Logs
+*.log
+
+# NuGet packages
+*.nupkg
+packages/
+project.lock.json
+*.nuget.props
+*.nuget.targets
+
+# Rider / Resharper
+*.DotSettings.user
+
+# Otros
+*.vsix
+*.dbmdl
+*.pdb
+*.cache
+*.DS_Store
+Thumbs.db
+
+# Secrets / configuración sensible
+appsettings.json
+appsettings.Development.json
+appsettings.Production.json
+.env
+secrets.json
+*.key
+*.pem
+
+# Database backups
+Database/Backups/
+*.bak
+*.mdf
+*.ldf
+
+# Azure / deployment artifacts
+*.publishsettings
+*.pubxml
+*.pubxml.user
+*.azurePubProfile
