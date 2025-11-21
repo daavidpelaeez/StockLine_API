@@ -280,5 +280,31 @@ namespace StockLine_API.Controllers
 
             return Ok(new { message = "Categoría asignada", productoId = id, categoriaId });
         }
+
+        [HttpPut("{id}/stock")]
+        public IActionResult UpdateStockManual(int id, [FromBody] int nuevoStock, [FromQuery] int usuarioID)
+        {
+            var producto = _service.Get(id);
+            if (producto == null) return NotFound(new { message = "Producto no encontrado" });
+
+            _service.UpdateStockManual(id, nuevoStock, usuarioID);
+
+            var updated = _service.Get(id);
+            var updatedDto = new ProductoDTO
+            {
+                ProductoID = updated.ProductoID,
+                Nombre = updated.Nombre,
+                Descripcion = updated.Descripcion,
+                Stock = updated.Stock,
+                CategoriaID = updated.CategoriaID,
+                CategoriaNombre = updated.Categoria?.Nombre,
+                FotoUrl = (updated.Foto != null && updated.Foto.Length > 0)
+                    ? Url.Action("GetPhoto", "Productos", new { id = updated.ProductoID }, Request.Scheme)
+                    : null,
+                Activo = updated.Activo
+            };
+
+            return Ok(new { message = "Stock modificado manualmente", producto = updatedDto });
+        }
     }
 }

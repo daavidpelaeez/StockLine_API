@@ -30,9 +30,11 @@ namespace StockLine_API.Services
             DateTime? from,
             DateTime? to,
             string sortBy = "Fecha",
-            string sortDir = "desc")
+            string sortDir = "desc",
+            int page = 1,
+            int pageSize = 25)
         {
-            var q = _context.MovimientosStock
+            var q = _context.MovimientosStock.AsNoTracking()
                 .Include(m => m.Producto)
                 .Include(m => m.Usuario)
                 .AsQueryable();
@@ -53,41 +55,22 @@ namespace StockLine_API.Services
                 _ => asc ? q.OrderBy(m => m.Fecha) : q.OrderByDescending(m => m.Fecha),
             };
 
-            var itemsQuery = q.ToList();
+            // Paginación real en la consulta
+            var itemsQuery = q.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
-            var itemsDto = new List<MovimientoStockHistoryItemDTO>(itemsQuery.Count);
-            foreach (var m in itemsQuery)
+            // Solo los campos necesarios en el DTO
+            var itemsDto = itemsQuery.Select(m => new MovimientoStockHistoryItemDTO
             {
-                int? stockAfter = null;
-                if (m.ProductoID.HasValue)
-                {
-                    var currentStock = _context.Productos
-                        .Where(p => p.ProductoID == m.ProductoID)
-                        .Select(p => p.Stock)
-                        .FirstOrDefault();
-
-                    var laterDeltas = _context.MovimientosStock
-                        .Where(x => x.ProductoID == m.ProductoID && x.MovimientoID > m.MovimientoID)
-                        .AsEnumerable()
-                        .Sum(x => string.Equals(x.TipoMovimiento, "Entrada", StringComparison.OrdinalIgnoreCase) ? x.Cantidad : -x.Cantidad);
-
-                    stockAfter = currentStock - laterDeltas;
-                }
-
-                itemsDto.Add(new MovimientoStockHistoryItemDTO
-                {
-                    MovimientoID = m.MovimientoID,
-                    Fecha = m.Fecha,
-                    ProductoID = m.ProductoID, 
-                    ProductoNombre = m.Producto?.Nombre ?? string.Empty,
-                    Cantidad = m.Cantidad,
-                    TipoMovimiento = m.TipoMovimiento,
-                    UsuarioID = m.UsuarioID,
-                    UsuarioNombre = m.Usuario != null ? $"{m.Usuario.Nombre} {m.Usuario.Apellidos}" : string.Empty,
-                    Observaciones = m.Observaciones,
-                    StockAfter = stockAfter
-                });
-            }
+                MovimientoID = m.MovimientoID,
+                Fecha = m.Fecha,
+                ProductoID = m.ProductoID,
+                ProductoNombre = m.Producto?.Nombre ?? string.Empty,
+                Cantidad = m.Cantidad,
+                TipoMovimiento = m.TipoMovimiento,
+                UsuarioID = m.UsuarioID,
+                UsuarioNombre = m.Usuario != null ? $"{m.Usuario.Nombre} {m.Usuario.Apellidos}" : string.Empty,
+                StockAfter = null // Si necesitas este campo, calcula solo si es estrictamente necesario
+            }).ToList();
 
             return itemsDto;
         }
@@ -170,7 +153,38 @@ namespace StockLine_API.Services
             if (usuario == null) throw new KeyNotFoundException("Usuario no encontrado");
 
             var tipo = dto.TipoMovimiento.Trim();
-            int newStock;
+            int newStock = producto.Stock;
+
+            // Verificación robusta de duplicados para envíos
+            bool yaExiste = false;
+            if (string.Equals(tipo, "Salida", StringComparison.OrdinalIgnoreCase) && dto.Observaciones != null && dto.Observaciones.StartsWith("Envio "))
+            {
+                yaExiste = _context.MovimientosStock.Any(m =>
+                    m.ProductoID == dto.ProductoID &&
+                    m.TipoMovimiento == "Salida" &&
+                    m.Observaciones == dto.Observaciones);
+            }
+            else if (string.Equals(tipo, "Entrada", StringComparison.OrdinalIgnoreCase))
+            {
+                yaExiste = _context.MovimientosStock.Any(m =>
+                    m.ProductoID == dto.ProductoID &&
+                    m.TipoMovimiento == "Entrada" &&
+                    m.Observaciones == dto.Observaciones);
+            }
+
+            if (yaExiste)
+            {
+                var movimientoExistente = _context.MovimientosStock.First(m =>
+                    m.ProductoID == dto.ProductoID &&
+                    m.TipoMovimiento == tipo &&
+                    m.Observaciones == dto.Observaciones);
+                tx.Commit();
+                movimientoExistente.Producto = producto;
+                movimientoExistente.Usuario = usuario;
+                return (movimientoExistente, producto.Stock);
+            }
+
+            // Solo modificar el stock si el movimiento NO existe
             if (string.Equals(tipo, "Salida", StringComparison.OrdinalIgnoreCase))
             {
                 if (producto.Stock < dto.Cantidad)
@@ -184,10 +198,6 @@ namespace StockLine_API.Services
             {
                 producto.Stock += dto.Cantidad;
                 newStock = producto.Stock;
-            }
-            else
-            {
-                throw new ArgumentException("TipoMovimiento debe ser 'Entrada' o 'Salida'");
             }
 
             _context.SaveChanges();
@@ -211,18 +221,17 @@ namespace StockLine_API.Services
             movimiento.Usuario = usuario;
 
             return (movimiento, newStock);
-        }
-
+}
         public object GetSummary(int? productId, DateTime? from, DateTime? to)
-        {
-            var q = _context.MovimientosStock.AsQueryable();
-            if (productId.HasValue) q = q.Where(m => m.ProductoID == productId.Value);
-            if (from.HasValue) q = q.Where(m => m.Fecha >= from.Value.Date);
-            if (to.HasValue) q = q.Where(m => m.Fecha <= to.Value.Date.AddDays(1).AddTicks(-1));
+{
+    var q = _context.MovimientosStock.AsQueryable();
+    if (productId.HasValue) q = q.Where(m => m.ProductoID == productId.Value);
+    if (from.HasValue) q = q.Where(m => m.Fecha >= from.Value.Date);
+    if (to.HasValue) q = q.Where(m => m.Fecha <= to.Value.Date.AddDays(1).AddTicks(-1));
 
-            var entradas = q.Where(m => m.TipoMovimiento != null && m.TipoMovimiento.ToLower() == "entrada").Sum(m => (int?)m.Cantidad) ?? 0;
-            var salidas = q.Where(m => m.TipoMovimiento != null && m.TipoMovimiento.ToLower() == "salida").Sum(m => (int?)m.Cantidad) ?? 0;
-            return new { TotalEntradas = entradas, TotalSalidas = salidas, Neto = entradas - salidas };
-        }
+    var entradas = q.Where(m => m.TipoMovimiento != null && m.TipoMovimiento.ToLower() == "entrada").Sum(m => (int?)m.Cantidad) ?? 0;
+    var salidas = q.Where(m => m.TipoMovimiento != null && m.TipoMovimiento.ToLower() == "salida").Sum(m => (int?)m.Cantidad) ?? 0;
+    return new { TotalEntradas = entradas, TotalSalidas = salidas, Neto = entradas - salidas };
+}
     }
 }

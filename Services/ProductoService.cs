@@ -38,9 +38,36 @@ namespace StockLine_API.Services
                 e.Nombre = p.Nombre;
                 e.Descripcion = p.Descripcion;
                 e.Stock = p.Stock;
-                e.Foto = p.Foto; 
+                e.Foto = p.Foto;
                 e.CategoriaID = p.CategoriaID;
                 _context.SaveChanges();
+            }
+        }
+
+        public void UpdateStockManual(int productoId, int nuevoStock, int usuarioID)
+        {
+            var e = _context.Productos.Find(productoId);
+            if (e != null)
+            {
+                int stockAnterior = e.Stock;
+                int diferencia = nuevoStock - stockAnterior;
+                e.Stock = nuevoStock;
+                _context.SaveChanges();
+
+                if (diferencia != 0)
+                {
+                    var movimiento = new MovimientoStock
+                    {
+                        ProductoID = productoId,
+                        Cantidad = Math.Abs(diferencia),
+                        TipoMovimiento = diferencia > 0 ? "Entrada" : "Salida",
+                        UsuarioID = usuarioID,
+                        Observaciones = $"Modificación manual de stock ({DateTime.Now:yyyy-MM-dd HH:mm:ss})",
+                        Fecha = DateTime.Now
+                    };
+                    _context.MovimientosStock.Add(movimiento);
+                    _context.SaveChanges();
+                }
             }
         }
 

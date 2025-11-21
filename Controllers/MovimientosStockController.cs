@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Collections.Generic;
+using Microsoft.AspNetCore.Mvc;
 using StockLine_API.DTOs;
 using StockLine_API.Services;
 using System;
@@ -27,13 +28,22 @@ namespace StockLine_API.Controllers
             [FromQuery] string? from,
             [FromQuery] string? to,
             [FromQuery] string sortBy = "Fecha",
-            [FromQuery] string sortDir = "desc")
+            [FromQuery] string sortDir = "desc",
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 25)
         {
             DateTime? fromDt = TryParseDate(from);
             DateTime? toDt = TryParseDate(to);
 
             var result = _service.GetFiltered(productId, usuarioId, tipo, fromDt, toDt, sortBy, sortDir);
-            return Ok(result);
+            var total = result.Count;
+            var paged = result.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            return Ok(new {
+                total,
+                page,
+                pageSize,
+                items = paged
+            });
         }
 
         

@@ -7,7 +7,6 @@ using DotNetEnv;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Cargar variables de entorno desde .env
 Env.Load();
 
 
@@ -30,7 +29,6 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 
-// Usar la variable de entorno para la cadena de conexión
 var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
 builder.Services.AddDbContext<StockLineContext>(options =>
     options.UseSqlServer(connectionString));
@@ -52,7 +50,7 @@ var app = builder.Build();
 
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/swagger"))
+    if (context.Request.Path.StartsWithSegments("/swagger") || context.Request.Path == "/index.html")
     {
         var authHeader = context.Request.Headers["Authorization"].ToString();
         var expected = "Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("admin:password123"));

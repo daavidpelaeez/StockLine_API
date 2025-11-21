@@ -128,26 +128,9 @@ public class EnvioService
                     SIMID = p.SIMID
                 };
                 _context.EnviosDetalle.Add(detalle);
-
-
-                var producto = _context.Productos.FirstOrDefault(x => x.ProductoID == p.ProductoID);
-                if (producto != null)
-                {
-                    producto.Stock -= p.Cantidad;
-                    _context.SaveChanges();
-
-                    // Crear movimiento negativo
-                    _movService.Create(new MovimientoStock
-                    {
-                        ProductoID = producto.ProductoID,
-                        Cantidad = -p.Cantidad,
-                        TipoMovimiento = "Salida",
-                        UsuarioID = usuarioID,
-                        Observaciones = $"Envio {envio.EnvioID} - {envio.NumeroReferencia}"
-                    });
-                }
             }
 
+            _context.SaveChanges();
             tx.Commit();
 
             return Get(envio.EnvioID);
@@ -162,52 +145,73 @@ public class EnvioService
 
     public void UpdateEstado(int envioId, string estado, int usuarioID)
     {
-
         if (!EstadosValidos.Contains(estado))
         {
             throw new ArgumentException($"Estado inválido. Los estados válidos son: {string.Join(", ", EstadosValidos)}");
         }
 
-        var e = _context.Envios
-            .Include(x => x.Detalles)
-            .Include(x => x.Ayuntamiento)
-            .FirstOrDefault(x => x.EnvioID == envioId);
-        if (e != null)
+        using var tx = _context.Database.BeginTransaction();
+        try
         {
-            e.Estado = estado;
-            e.UsuarioModificadorID = usuarioID;
-            e.FechaModificacion = DateTime.Now;
-            
-            e.Ubicacion = e.Ayuntamiento != null ? e.Ayuntamiento.Nombre : "";
-            _context.SaveChanges();
-
-            
-            if (estado == "Enviado")
+            var e = _context.Envios
+                .Include(x => x.Detalles)
+                .Include(x => x.Ayuntamiento)
+                .FirstOrDefault(x => x.EnvioID == envioId);
+            if (e != null)
             {
-                foreach (var detalle in e.Detalles)
-                {
-                    
-                    _movService.Create(new MovimientoStockDTO
-                    {
-                        ProductoID = detalle.ProductoID,
-                        Cantidad = detalle.Cantidad,
-                        TipoMovimiento = "Salida",
-                        UsuarioID = usuarioID,
-                        Observaciones = $"Envio {e.EnvioID} - {e.NumeroReferencia}"
-                    });
+                e.Estado = estado;
+                e.UsuarioModificadorID = usuarioID;
+                e.FechaModificacion = DateTime.Now;
+                e.Ubicacion = e.Ayuntamiento != null ? e.Ayuntamiento.Nombre : "";
+                _context.SaveChanges();
 
-                    
-                    if (detalle.SIMID != null)
+                if (estado == "Enviado")
+                {
+                    foreach (var detalle in e.Detalles)
                     {
-                        var sim = _context.SIMs.Find(detalle.SIMID);
-                        if (sim != null)
+                        var observacion = $"Envio {e.EnvioID} - {e.NumeroReferencia}";
+
+                        bool yaExiste = _context.MovimientosStock.Any(m =>
+                            m.ProductoID == detalle.ProductoID &&
+                            m.TipoMovimiento == "Salida" &&
+                            m.Observaciones == observacion);
+                        if (!yaExiste)
                         {
-                            sim.Ubicacion = e.Ubicacion ?? "En almacén";
-                            _context.SaveChanges();
+                            try
+                            {
+                                _movService.Create(new MovimientoStockDTO
+                                {
+                                    ProductoID = detalle.ProductoID,
+                                    Cantidad = detalle.Cantidad,
+                                    TipoMovimiento = "Salida",
+                                    UsuarioID = usuarioID,
+                                    Observaciones = observacion
+                                });
+                            }
+                            catch (InvalidOperationException ex)
+                            {
+                                throw new ArgumentException($"No se pudo realizar la salida de stock para el producto {detalle.ProductoID}: {ex.Message}");
+                            }
+                        }
+
+                        if (detalle.SIMID != null)
+                        {
+                            var sim = _context.SIMs.Find(detalle.SIMID);
+                            if (sim != null)
+                            {
+                                sim.Ubicacion = e.Ubicacion ?? "En almacén";
+                                _context.SaveChanges();
+                            }
                         }
                     }
                 }
             }
+            tx.Commit();
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
         }
     }
 }
