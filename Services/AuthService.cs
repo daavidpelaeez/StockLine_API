@@ -32,5 +32,22 @@ namespace StockLine_API.Services
             if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) return null;
             return user;
         }
+
+        // Nuevo método para respuesta de login con ComercialID
+        public object LoginResponse(string email, string password)
+        {
+            var user = _context.Usuarios.FirstOrDefault(u => u.Email == email && u.Activo);
+            if (user == null) return null;
+            if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) return null;
+            return new
+            {
+                user.UsuarioID,
+                user.Nombre,
+                user.Apellidos,
+                user.Email,
+                user.RoleID,
+                user.ComercialID
+            };
+        }
     }
 }

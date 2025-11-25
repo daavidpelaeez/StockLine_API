@@ -10,10 +10,14 @@ namespace StockLine_API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly AuthService _auth;
+        private readonly UsuarioService _usuarioService;
+        private readonly ComercialService _comercialService;
 
-        public AuthController(AuthService auth)
+        public AuthController(AuthService auth, UsuarioService usuarioService, ComercialService comercialService)
         {
             _auth = auth;
+            _usuarioService = usuarioService;
+            _comercialService = comercialService;
         }
 
         [HttpPost("register")]
@@ -30,12 +34,12 @@ namespace StockLine_API.Controllers
                 RoleID = dto.RoleID
             };
 
-            var created = _auth.Register(user, dto.Password);
+            // Usar UsuarioService para la lógica de creación y asociación de comercial
+            var created = _usuarioService.Create(user, dto.Password);
 
             if (created == null)
                 return BadRequest(new { message = "Usuario ya existe" });
 
-            
             return Ok(new
             {
                 message = "Usuario registrado",
@@ -45,7 +49,8 @@ namespace StockLine_API.Controllers
                     created.Nombre,
                     created.Apellidos,
                     created.Email,
-                    created.RoleID
+                    created.RoleID,
+                    created.ComercialID
                 }
             });
         }
@@ -70,7 +75,8 @@ namespace StockLine_API.Controllers
                     user.Nombre,
                     user.Apellidos,
                     user.Email,
-                    user.RoleID
+                    user.RoleID,
+                    user.ComercialID
                 }
             });
         }

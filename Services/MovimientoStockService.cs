@@ -138,58 +138,24 @@ namespace StockLine_API.Services
             };
         }
 
-        public (MovimientoStock movimiento, int stockAfter) Create(MovimientoStockDTO dto)
+        public (MovimientoStock? movimiento, int stockAfter) Create(MovimientoStockDTO dto)
         {
             if (dto == null) throw new ArgumentNullException(nameof(dto));
             if (dto.Cantidad <= 0) throw new ArgumentException("Cantidad must be greater than 0", nameof(dto.Cantidad));
             if (string.IsNullOrWhiteSpace(dto.TipoMovimiento)) throw new ArgumentException("TipoMovimiento is required", nameof(dto.TipoMovimiento));
 
-            using var tx = _context.Database.BeginTransaction();
-
             var producto = _context.Productos.FirstOrDefault(p => p.ProductoID == dto.ProductoID);
             if (producto == null) throw new KeyNotFoundException("Producto no encontrado");
-
-            var usuario = _context.Usuarios.FirstOrDefault(u => u.UsuarioID == dto.UsuarioID);
-            if (usuario == null) throw new KeyNotFoundException("Usuario no encontrado");
 
             var tipo = dto.TipoMovimiento.Trim();
             int newStock = producto.Stock;
 
-            // Verificación robusta de duplicados para envíos
-            bool yaExiste = false;
-            if (string.Equals(tipo, "Salida", StringComparison.OrdinalIgnoreCase) && dto.Observaciones != null && dto.Observaciones.StartsWith("Envio "))
-            {
-                yaExiste = _context.MovimientosStock.Any(m =>
-                    m.ProductoID == dto.ProductoID &&
-                    m.TipoMovimiento == "Salida" &&
-                    m.Observaciones == dto.Observaciones);
-            }
-            else if (string.Equals(tipo, "Entrada", StringComparison.OrdinalIgnoreCase))
-            {
-                yaExiste = _context.MovimientosStock.Any(m =>
-                    m.ProductoID == dto.ProductoID &&
-                    m.TipoMovimiento == "Entrada" &&
-                    m.Observaciones == dto.Observaciones);
-            }
-
-            if (yaExiste)
-            {
-                var movimientoExistente = _context.MovimientosStock.First(m =>
-                    m.ProductoID == dto.ProductoID &&
-                    m.TipoMovimiento == tipo &&
-                    m.Observaciones == dto.Observaciones);
-                tx.Commit();
-                movimientoExistente.Producto = producto;
-                movimientoExistente.Usuario = usuario;
-                return (movimientoExistente, producto.Stock);
-            }
-
-            // Solo modificar el stock si el movimiento NO existe
             if (string.Equals(tipo, "Salida", StringComparison.OrdinalIgnoreCase))
             {
                 if (producto.Stock < dto.Cantidad)
                 {
-                    throw new InvalidOperationException($"No hay suficiente stock para realizar la salida. Stock actual: {producto.Stock}");
+                    // No hay suficiente stock, no lanzar excepción
+                    return (null, producto.Stock);
                 }
                 producto.Stock -= dto.Cantidad;
                 newStock = producto.Stock;
@@ -215,10 +181,8 @@ namespace StockLine_API.Services
             _context.MovimientosStock.Add(movimiento);
             _context.SaveChanges();
 
-            tx.Commit();
-
             movimiento.Producto = producto;
-            movimiento.Usuario = usuario;
+            movimiento.Usuario = _context.Usuarios.FirstOrDefault(u => u.UsuarioID == dto.UsuarioID);
 
             return (movimiento, newStock);
 }

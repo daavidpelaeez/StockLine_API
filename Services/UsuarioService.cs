@@ -2,16 +2,21 @@
 using System.Linq;
 using StockLine_API.Models;
 using Microsoft.EntityFrameworkCore;
+using BCrypt.Net;
 
 namespace StockLine_API.Services
 {
     public class UsuarioService
     {
         private readonly StockLineContext _context;
+        private readonly ComercialService _comercialService;
+        // Define aquí el ID del rol comercial (ajusta según tu base de datos)
+        private const int ROLE_COMERCIAL_ID = 2; // Cambia este valor si tu ID de rol comercial es diferente
 
-        public UsuarioService(StockLineContext context)
+        public UsuarioService(StockLineContext context, ComercialService comercialService)
         {
             _context = context;
+            _comercialService = comercialService;
         }
 
         public List<Usuario> GetAll(bool? activos = true)
@@ -28,10 +33,32 @@ namespace StockLine_API.Services
             .Include(u => u.Role)
             .FirstOrDefault(u => u.UsuarioID == id);
         
-        public Usuario Create(Usuario u) 
+        // Nuevo método para crear usuario y asociar comercial si corresponde
+        public Usuario Create(Usuario u, string password) 
         { 
+            // Verifica si ya existe el usuario
+            var existing = _context.Usuarios.FirstOrDefault(x => x.Email == u.Email);
+            if (existing != null) return null;
+
+            u.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
+            u.Activo = true;
             _context.Usuarios.Add(u); 
             _context.SaveChanges(); 
+
+            // Si el usuario es comercial, crea el comercial y asocia
+            if (u.RoleID == ROLE_COMERCIAL_ID)
+            {
+                var comercial = new Comercial
+                {
+                    Nombre = u.Nombre,
+                    Apellidos = u.Apellidos,
+                    Email = u.Email,
+                    Telefono = "",
+                };
+                _comercialService.Create(comercial);
+                u.ComercialID = comercial.ComercialID;
+                _context.SaveChanges();
+            }
             return u; 
         }
         
@@ -57,7 +84,6 @@ namespace StockLine_API.Services
             if (usuario == null) 
                 return false;
 
-            
             var tieneMovimientos = _context.MovimientosStock
                 .Any(m => m.UsuarioID == id);
 
@@ -68,7 +94,6 @@ namespace StockLine_API.Services
                     "Considere desactivar el usuario en lugar de eliminarlo.");
             }
 
-            
             var tieneEnvios = _context.Envios
                 .Any(e => e.UsuarioModificadorID == id);
 

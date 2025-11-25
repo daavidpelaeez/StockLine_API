@@ -46,29 +46,33 @@ namespace StockLine_API.Services
 
         public void UpdateStockManual(int productoId, int nuevoStock, int usuarioID)
         {
-            var e = _context.Productos.Find(productoId);
-            if (e != null)
+            var strategy = _context.Database.CreateExecutionStrategy();
+            strategy.Execute(() =>
             {
-                int stockAnterior = e.Stock;
-                int diferencia = nuevoStock - stockAnterior;
-                e.Stock = nuevoStock;
-                _context.SaveChanges();
-
-                if (diferencia != 0)
+                var e = _context.Productos.Find(productoId);
+                if (e != null)
                 {
-                    var movimiento = new MovimientoStock
-                    {
-                        ProductoID = productoId,
-                        Cantidad = Math.Abs(diferencia),
-                        TipoMovimiento = diferencia > 0 ? "Entrada" : "Salida",
-                        UsuarioID = usuarioID,
-                        Observaciones = $"Modificación manual de stock ({DateTime.Now:yyyy-MM-dd HH:mm:ss})",
-                        Fecha = DateTime.Now
-                    };
-                    _context.MovimientosStock.Add(movimiento);
+                    int stockAnterior = e.Stock;
+                    int diferencia = nuevoStock - stockAnterior;
+                    e.Stock = nuevoStock;
                     _context.SaveChanges();
+
+                    if (diferencia != 0)
+                    {
+                        var movimiento = new MovimientoStock
+                        {
+                            ProductoID = productoId,
+                            Cantidad = Math.Abs(diferencia),
+                            TipoMovimiento = diferencia > 0 ? "Entrada" : "Salida",
+                            UsuarioID = usuarioID,
+                            Observaciones = $"Modificación manual de stock ({DateTime.Now:yyyy-MM-dd HH:mm:ss})",
+                            Fecha = DateTime.Now
+                        };
+                        _context.MovimientosStock.Add(movimiento);
+                        _context.SaveChanges();
+                    }
                 }
-            }
+            });
         }
 
         public void Delete(int id)

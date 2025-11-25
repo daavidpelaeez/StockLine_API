@@ -40,6 +40,13 @@ namespace StockLine_API
             .HasForeignKey(u => u.RoleID)
             .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<Usuario>()
+                .HasOne(u => u.Comercial)
+                .WithMany()
+                .HasForeignKey(u => u.ComercialID)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<Ayuntamiento>()
                 .HasOne(a => a.Comercial)
                 .WithMany()

@@ -63,6 +63,10 @@ namespace StockLine_API.Controllers
             try
             {
                 var (movimiento, stockAfter) = _service.Create(dto);
+                if (movimiento == null)
+                {
+                    return Conflict(new { message = "No hay suficiente stock para realizar la salida." });
+                }
 
                 var response = new MovimientoStockCreateResponseDTO
                 {
@@ -83,10 +87,6 @@ namespace StockLine_API.Controllers
             catch (KeyNotFoundException knf)
             {
                 return NotFound(new { message = knf.Message });
-            }
-            catch (InvalidOperationException ioe)
-            {
-                return Conflict(new { message = ioe.Message });
             }
             catch (ArgumentException ae)
             {

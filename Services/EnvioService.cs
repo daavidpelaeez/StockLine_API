@@ -101,45 +101,62 @@ public class EnvioService
 
     public EnvioDTO Create(CrearEnvioDTO dto, int usuarioID)
     {
-        using var tx = _context.Database.BeginTransaction();
-
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return strategy.Execute(() =>
         {
-            var envio = new Envio
+            using var tx = _context.Database.BeginTransaction();
+            try
             {
-                AyuntamientoID = dto.AyuntamientoID,
-                ComercialID = dto.ComercialID,
-                NumeroReferencia = dto.NumeroReferencia,
-                Estado = "Pendiente",
-                FechaEnvio = DateTime.Now,
-                UsuarioModificadorID = usuarioID
-            };
-
-            _context.Envios.Add(envio);
-            _context.SaveChanges();
-
-            foreach (var p in dto.Productos)
-            {
-                var detalle = new EnvioDetalle
+                var usuario = _context.Usuarios.FirstOrDefault(u => u.UsuarioID == usuarioID);
+                int? comercialId = usuario?.ComercialID;
+                if (comercialId == null)
                 {
-                    EnvioID = envio.EnvioID,
-                    ProductoID = p.ProductoID,
-                    Cantidad = p.Cantidad,
-                    SIMID = p.SIMID
+                    if (dto.ComercialID > 0 && _context.Comerciales.Any(c => c.ComercialID == dto.ComercialID))
+                    {
+                        comercialId = dto.ComercialID;
+                    }
+                    else
+                    {
+                        throw new ArgumentException("No se ha especificado un comercial válido para el envío.");
+                    }
+                }
+
+                var envio = new Envio
+                {
+                    AyuntamientoID = dto.AyuntamientoID,
+                    ComercialID = comercialId.Value,
+                    NumeroReferencia = dto.NumeroReferencia,
+                    Estado = "Pendiente",
+                    FechaEnvio = DateTime.Now,
+                    UsuarioModificadorID = usuarioID
                 };
-                _context.EnviosDetalle.Add(detalle);
+
+                _context.Envios.Add(envio);
+                _context.SaveChanges();
+
+                foreach (var p in dto.Productos)
+                {
+                    var detalle = new EnvioDetalle
+                    {
+                        EnvioID = envio.EnvioID,
+                        ProductoID = p.ProductoID,
+                        Cantidad = p.Cantidad,
+                        SIMID = p.SIMID
+                    };
+                    _context.EnviosDetalle.Add(detalle);
+                }
+
+                _context.SaveChanges();
+                tx.Commit();
+
+                return Get(envio.EnvioID);
             }
-
-            _context.SaveChanges();
-            tx.Commit();
-
-            return Get(envio.EnvioID);
-        }
-        catch
-        {
-            tx.Rollback();
-            throw;
-        }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+        });
     }
 
 
@@ -150,68 +167,49 @@ public class EnvioService
             throw new ArgumentException($"Estado inválido. Los estados válidos son: {string.Join(", ", EstadosValidos)}");
         }
 
-        using var tx = _context.Database.BeginTransaction();
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+        strategy.Execute(() =>
         {
-            var e = _context.Envios
-                .Include(x => x.Detalles)
-                .Include(x => x.Ayuntamiento)
-                .FirstOrDefault(x => x.EnvioID == envioId);
-            if (e != null)
+            using var tx = _context.Database.BeginTransaction();
+            try
             {
-                e.Estado = estado;
-                e.UsuarioModificadorID = usuarioID;
-                e.FechaModificacion = DateTime.Now;
-                e.Ubicacion = e.Ayuntamiento != null ? e.Ayuntamiento.Nombre : "";
-                _context.SaveChanges();
+                var e = _context.Envios
+                    .Include(x => x.Detalles)
+                    .ThenInclude(d => d.Producto)
+                    .Include(x => x.Ayuntamiento)
+                    .FirstOrDefault(x => x.EnvioID == envioId);
 
-                if (estado == "Enviado")
+                if (e != null)
                 {
-                    foreach (var detalle in e.Detalles)
+                    e.Estado = estado;
+                    e.UsuarioModificadorID = usuarioID;
+                    e.FechaModificacion = DateTime.Now;
+                    e.Ubicacion = e.Ayuntamiento != null ? e.Ayuntamiento.Nombre : "";
+                    _context.SaveChanges();
+
+                    if (estado == "Enviado")
                     {
-                        var observacion = $"Envio {e.EnvioID} - {e.NumeroReferencia}";
-
-                        bool yaExiste = _context.MovimientosStock.Any(m =>
-                            m.ProductoID == detalle.ProductoID &&
-                            m.TipoMovimiento == "Salida" &&
-                            m.Observaciones == observacion);
-                        if (!yaExiste)
+                        foreach (var detalle in e.Detalles)
                         {
-                            try
+                            string observacion = $"Envio {e.EnvioID} - {e.NumeroReferencia}";
+                            _movService.Create(new MovimientoStockDTO
                             {
-                                _movService.Create(new MovimientoStockDTO
-                                {
-                                    ProductoID = detalle.ProductoID,
-                                    Cantidad = detalle.Cantidad,
-                                    TipoMovimiento = "Salida",
-                                    UsuarioID = usuarioID,
-                                    Observaciones = observacion
-                                });
-                            }
-                            catch (InvalidOperationException ex)
-                            {
-                                throw new ArgumentException($"No se pudo realizar la salida de stock para el producto {detalle.ProductoID}: {ex.Message}");
-                            }
-                        }
-
-                        if (detalle.SIMID != null)
-                        {
-                            var sim = _context.SIMs.Find(detalle.SIMID);
-                            if (sim != null)
-                            {
-                                sim.Ubicacion = e.Ubicacion ?? "En almacén";
-                                _context.SaveChanges();
-                            }
+                                ProductoID = detalle.ProductoID,
+                                Cantidad = detalle.Cantidad,
+                                TipoMovimiento = "Salida",
+                                UsuarioID = usuarioID,
+                                Observaciones = observacion
+                            });
                         }
                     }
+                    tx.Commit();
                 }
             }
-            tx.Commit();
-        }
-        catch
-        {
-            tx.Rollback();
-            throw;
-        }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+        });
     }
 }

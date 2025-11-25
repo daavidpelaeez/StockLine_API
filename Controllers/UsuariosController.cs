@@ -73,12 +73,13 @@ namespace StockLine_API.Controllers
                 Apellidos = dto.Apellidos,
                 Email = dto.Email,
                 RoleID = dto.RoleID,
-                PasswordHash = "",
-                Activo = dto.Activo 
+                PasswordHash = string.Empty,
+                Activo = dto.Activo
             };
 
-            _service.Create(u);
-            return Ok(new { message = "Usuario creado", usuario = new UsuarioDTO { UsuarioID = u.UsuarioID, Nombre = u.Nombre, Apellidos = u.Apellidos, Email = u.Email, RoleID = u.RoleID, Activo = u.Activo } });
+            // Proporciona un password por defecto o pide que se envíe en el DTO si es necesario
+            var created = _service.Create(u, "passwordTemporal123");
+            return Ok(new { message = "Usuario creado", usuario = new UsuarioDTO { UsuarioID = created.UsuarioID, Nombre = created.Nombre, Apellidos = created.Apellidos, Email = created.Email, RoleID = created.RoleID, Activo = created.Activo } });
         }
 
         

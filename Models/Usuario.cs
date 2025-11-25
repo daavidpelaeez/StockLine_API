@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.Collections.Generic;
 
 namespace StockLine_API.Models
 {
@@ -14,5 +15,8 @@ namespace StockLine_API.Models
         public Role Role { get; set; }
         public List<MovimientoStock> MovimientosStock { get; set; } = new List<MovimientoStock>();
         public bool Activo { get; set; } = true;
+
+        public int? ComercialID { get; set; }
+        public Comercial? Comercial { get; set; }
     }
 }
