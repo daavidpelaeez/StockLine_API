@@ -67,6 +67,16 @@ namespace StockLine_API.Services
             var e = _context.Usuarios.Find(u.UsuarioID); 
             if (e != null) 
             { 
+                // Validar que el RoleID existe
+                var roleExists = _context.Roles.Any(r => r.RoleID == u.RoleID);
+                if (!roleExists)
+                    throw new InvalidOperationException($"El rol con ID {u.RoleID} no existe.");
+
+                // Validar que el email no esté en uso por otro usuario
+                var emailExists = _context.Usuarios.Any(x => x.Email == u.Email && x.UsuarioID != u.UsuarioID);
+                if (emailExists)
+                    throw new InvalidOperationException($"El email '{u.Email}' ya está en uso por otro usuario.");
+
                 e.Nombre = u.Nombre; 
                 e.Apellidos = u.Apellidos; 
                 e.Email = u.Email; 
