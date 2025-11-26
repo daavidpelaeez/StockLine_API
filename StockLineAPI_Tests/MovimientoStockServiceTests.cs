@@ -9,7 +9,7 @@ namespace StockLineAPI_Tests
 {
     public class MovimientoStockServiceTests
     {
-        private StockLineContext GetInMemoryDbContext()
+        private static StockLineContext GetInMemoryDbContext()
         {
             var options = new DbContextOptionsBuilder<StockLineContext>()
                 .UseInMemoryDatabase(databaseName: "MovimientoStockServiceTestDb")

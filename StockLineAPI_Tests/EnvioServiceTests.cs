@@ -11,10 +11,10 @@ namespace StockLineAPI_Tests
 {
     public class EnvioServiceTests
     {
-        private StockLineContext GetInMemoryDbContext()
+        private static StockLineContext GetInMemoryDbContext()
         {
             var options = new DbContextOptionsBuilder<StockLineContext>()
-                .UseInMemoryDatabase(databaseName: "EnvioServiceTestDb")
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()) // Base de datos única por test
                 .Options;
             return new StockLineContext(options);
         }

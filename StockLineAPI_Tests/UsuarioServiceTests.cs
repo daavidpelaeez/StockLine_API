@@ -10,7 +10,7 @@ namespace StockLineAPI_Tests
 {
     public class UsuarioServiceTests
     {
-        private StockLineContext GetInMemoryDbContext()
+        private static StockLineContext GetInMemoryDbContext()
         {
             var options = new DbContextOptionsBuilder<StockLineContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()) // Base de datos única por test
